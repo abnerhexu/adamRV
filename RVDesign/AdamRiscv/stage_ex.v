@@ -17,7 +17,9 @@ module stage_ex(
 wire [3:0]  alu_ctrl;
 wire [31:0] op_A;
 wire [31:0] op_B;
+/* verilator lint_off UNUSEDSIGNAL */
 wire        br_mark;
+/* verilator lint_on UNUSEDSIGNAL */
 
 alu_control u_alu_control(
     .alu_op     (ex4_alu_op     ),

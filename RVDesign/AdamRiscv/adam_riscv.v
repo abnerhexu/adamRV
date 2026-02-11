@@ -1,3 +1,4 @@
+/* verilator lint_off UNUSEDSIGNAL */
 module adam_riscv(
     input wire clk,
     input wire rst
@@ -96,8 +97,10 @@ wire          wb_mem2reg;
 // IS write enable for scoreboard
 wire is_write_en = is_can_issue;
 wire rs_write_en = is_can_issue && is_regs_write && (is_rd != 5'd0);
-// WB clear enable for scoreboard
-wire wb_clear_en = w_regs_en;
+// WB clear: FU table needs clearing for ALL instructions (including SW)
+wire wb_fu_clear_en = (wb_fu_id != 3'd0);
+// WB clear: register status table only clears for register-writing instructions
+wire wb_rs_clear_en = w_regs_en;
 
 // ==================== IF Stage ====================
 stage_if u_stage_if(
@@ -159,9 +162,9 @@ reg_status_table u_reg_status_table(
     .is_write_en (rs_write_en ),
     .is_rd       (is_rd       ),
     .is_fu_id    (is_fu_id    ),
-    .wb_clear_en (wb_clear_en ),
-    .wb_rd       (w_regs_addr ),
-    .wb_fu_id    (wb_fu_id    ),
+    .wb_clear_en (wb_rs_clear_en ),
+    .wb_rd       (w_regs_addr    ),
+    .wb_fu_id    (wb_fu_id       ),
     .status_0  (rs_0 ), .status_1  (rs_1 ), .status_2  (rs_2 ), .status_3  (rs_3 ),
     .status_4  (rs_4 ), .status_5  (rs_5 ), .status_6  (rs_6 ), .status_7  (rs_7 ),
     .status_8  (rs_8 ), .status_9  (rs_9 ), .status_10 (rs_10), .status_11 (rs_11),
@@ -200,7 +203,7 @@ fu_status_table u_fu_status_table(
     .reg_status_20 (rs_20), .reg_status_21 (rs_21), .reg_status_22 (rs_22), .reg_status_23 (rs_23),
     .reg_status_24 (rs_24), .reg_status_25 (rs_25), .reg_status_26 (rs_26), .reg_status_27 (rs_27),
     .reg_status_28 (rs_28), .reg_status_29 (rs_29), .reg_status_30 (rs_30), .reg_status_31 (rs_31),
-    .wb_clear_en   (wb_clear_en   ),
+    .wb_clear_en   (wb_fu_clear_en),
     .wb_fu_id      (wb_fu_id      ),
     .ro_valid      (fu_ro_valid      ),
     .ro_fu_id      (fu_ro_fu_id      ),
@@ -464,5 +467,19 @@ stage_wb u_stage_wb(
     .wb_mem2reg  (wb_mem2reg  ),
     .w_regs_data (w_regs_data )
 );
+
+// Debug output
+always @(posedge clk) begin
+    if (rst) begin
+        if (is_can_issue)
+            $display("[IS] ISSUE inst=%h pc=%h fu=%0d rd=x%0d", is_inst, is_pc, is_fu_id, is_rd);
+        if (is_stall)
+            $display("[IS] STALL inst=%h pc=%h fu=%0d busy=%b", is_inst, is_pc, is_fu_id, fu_busy);
+        if (fu_ro_valid)
+            $display("[FU] SELECT fu=%0d rd=x%0d rs1=x%0d rs2=x%0d", fu_ro_fu_id, fu_ro_rd, fu_ro_rs1, fu_ro_rs2);
+        if (wb_fu_clear_en)
+            $display("[WB] CLEAR fu=%0d rd=x%0d wen=%0d data=%h", wb_fu_id, w_regs_addr, w_regs_en, w_regs_data);
+    end
+end
 
 endmodule

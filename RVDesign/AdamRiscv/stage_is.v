@@ -1,5 +1,6 @@
 `include "./AdamRiscv/define.vh"
 
+/* verilator lint_off UNUSEDSIGNAL */
 module stage_is(
     input  wire[31:0]  is_inst,
     input  wire[31:0]  is_pc,
@@ -112,8 +113,11 @@ function [2:0] get_rs;
 endfunction
 
 // Issue condition checks
-wire is_valid = (is_inst != 32'b0) && (fu_id_r != `FU_NONE);
-wire fu_free  = !fu_busy[fu_id_r - 3'd1];
+// NOP (addi x0,x0,0) and other instructions writing x0 with no memory side-effect
+// should not enter the scoreboard — they are effectively no-ops
+wire is_nop = (!is_mem_write && !is_mem_read && is_rd == 5'd0);
+wire is_valid = (is_inst != 32'b0) && (fu_id_r != `FU_NONE) && !is_nop;
+wire fu_free  = (fu_id_r == `FU_NONE) ? 1'b0 : !fu_busy[fu_id_r - 3'd1];
 wire no_waw   = !is_regs_write || (is_rd == 5'd0) || (get_rs(is_rd) == 3'b000);
 
 assign is_can_issue = is_valid && fu_free && no_waw;

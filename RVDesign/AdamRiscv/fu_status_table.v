@@ -125,10 +125,15 @@ wire s2_rdy [0:6];
 genvar g;
 generate
     for (g = 0; g < 7; g = g + 1) begin : ready_check
+        // Self-dependency fix: if reg_status[rs] == this FU's own ID (g+1),
+        // the marking was done by this instruction itself, so the register
+        // file still holds the correct committed value — treat as ready.
         assign s1_rdy[g] = (entry_src1[g] == `NULL) || (entry_src1[g] == `PC) ||
-                           (entry_rs1[g] == 5'd0) || (get_reg_status(entry_rs1[g]) == 3'b000);
+                           (entry_rs1[g] == 5'd0) || (get_reg_status(entry_rs1[g]) == 3'b000) ||
+                           (get_reg_status(entry_rs1[g]) == (g + 1));
         assign s2_rdy[g] = (entry_src2[g] == `IMM) || (entry_src2[g] == `PC_PLUS4) ||
-                           (entry_rs2[g] == 5'd0) || (get_reg_status(entry_rs2[g]) == 3'b000);
+                           (entry_rs2[g] == 5'd0) || (get_reg_status(entry_rs2[g]) == 3'b000) ||
+                           (get_reg_status(entry_rs2[g]) == (g + 1));
         assign can_select[g] = entry_busy[g] && (entry_state[g] == 2'b01) && s1_rdy[g] && s2_rdy[g];
     end
 endgenerate

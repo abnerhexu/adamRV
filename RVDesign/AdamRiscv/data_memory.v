@@ -12,6 +12,7 @@ module data_memory #(
 );
 
 reg [7:0] data [DROM_SPACE-1:0];
+initial $readmemh("./AdamRiscv/rom/test_program.hex", data);
 
 /*----------------Write DataMemory---------------------*/
 always @(posedge clk) begin
