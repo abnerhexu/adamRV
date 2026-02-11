@@ -83,3 +83,13 @@
 `define LW  3'b010
 `define LBU 3'b100
 `define LHU 3'b101
+
+//------------------Functional Unit IDs-----------------
+`define FU_NONE 3'd0
+`define FU_ADD  3'd1
+`define FU_SUB  3'd2
+`define FU_AND  3'd3
+`define FU_OR   3'd4
+`define FU_XOR  3'd5
+`define FU_LW   3'd6
+`define FU_SW   3'd7

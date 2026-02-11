@@ -1,221 +1,433 @@
-// author       : adam_wu
-// course       : Microprocessor Architecture and Design
-// ID           : 21033075
-// project_name : AdamRiscv(Five-stage Pipelined Processor Based on RV32I)
-
 module adam_riscv(
     input wire clk,
     input wire rst
 );
 
-wire          br_ctrl;
-wire[31:0]    br_addr;
-wire          stall;
+// ============ IF Stage Signals ============
 wire[31:0]    if_pc;
 wire[31:0]    if_inst;
-wire          flush;
-wire[31:0]    id_inst;
-wire[31:0]    id_pc;
 
+// ============ IS Stage Signals ============
+wire[31:0]    is_inst;
+wire[31:0]    is_pc;
+wire[2:0]     is_fu_id;
+wire          is_can_issue;
+wire          is_stall;
+wire[4:0]     is_rd, is_rs1, is_rs2;
+wire[2:0]     is_func3_code;
+wire          is_func7_code;
+wire[2:0]     is_alu_op;
+wire[1:0]     is_alu_src1, is_alu_src2;
+wire          is_mem_read, is_mem2reg, is_mem_write, is_regs_write;
+
+// ============ FU/Scoreboard Signals ============
+wire[6:0]     fu_busy;
+wire          fu_ro_valid;
+wire[2:0]     fu_ro_fu_id;
+wire[31:0]    fu_ro_inst, fu_ro_pc;
+wire[4:0]     fu_ro_rd, fu_ro_rs1, fu_ro_rs2;
+wire[2:0]     fu_ro_func3_code, fu_ro_alu_op;
+wire          fu_ro_func7_code;
+wire[1:0]     fu_ro_alu_src1, fu_ro_alu_src2;
+wire          fu_ro_mem_read, fu_ro_mem2reg, fu_ro_mem_write, fu_ro_regs_write;
+
+// ============ Register Status Table Signals ============
+wire[2:0]     rs_0,  rs_1,  rs_2,  rs_3,  rs_4,  rs_5,  rs_6,  rs_7;
+wire[2:0]     rs_8,  rs_9,  rs_10, rs_11, rs_12, rs_13, rs_14, rs_15;
+wire[2:0]     rs_16, rs_17, rs_18, rs_19, rs_20, rs_21, rs_22, rs_23;
+wire[2:0]     rs_24, rs_25, rs_26, rs_27, rs_28, rs_29, rs_30, rs_31;
+
+// ============ RO Stage Signals ============
+wire[31:0]    ro_regs_data1, ro_regs_data2, ro_imm;
+
+// ============ WB Signals ============
 wire          w_regs_en;
 wire[4:0]     w_regs_addr;
 wire[31:0]    w_regs_data;
-wire[31:0]    id_regs_data1;
-wire[31:0]    id_regs_data2;
-wire[31:0]    id_imm;
-wire[2:0]     id_func3_code; 
-wire          id_func7_code;
-wire[4:0]     id_rd;
-wire          id_br;
-wire          id_mem_read;
-wire          id_mem2reg;
-wire[2:0]     id_alu_op;
-wire          id_mem_write;
-wire[1:0]     id_alu_src1;
-wire[1:0]     id_alu_src2;
-wire          id_br_addr_mode;
-wire          id_regs_write;
-wire[4:0]     id_rs1;
-wire[4:0]     id_rs2;
-wire[4:0]     ex_rs1;
-wire[4:0]     ex_rs2;
-wire[31:0]    ex_pc;
-wire[31:0]    ex_regs_data1;
-wire[31:0]    ex_regs_data2;
-wire[31:0]    ex_imm;
-wire[2:0]     ex_func3_code; 
-wire          ex_func7_code;
-wire[4:0]     ex_rd;
-wire          ex_br;
-wire          ex_mem_read;
-wire          ex_mem2reg;
-wire[2:0]     ex_alu_op;
-wire          ex_mem_write;
-wire[1:0]     ex_alu_src1;
-wire[1:0]     ex_alu_src2;
-wire          ex_br_addr_mode;
-wire          ex_regs_write;
-wire[31:0]    ex_alu_o;
+wire[2:0]     wb_fu_id;
 
-wire[1:0]     forwardA;
-wire[1:0]     forwardB;
+// ============ EX1 Signals ============
+wire[31:0]    ex1_pc, ex1_regs_data1, ex1_regs_data2, ex1_imm;
+wire[2:0]     ex1_func3_code, ex1_alu_op;
+wire          ex1_func7_code;
+wire[4:0]     ex1_rd, ex1_rs2;
+wire[1:0]     ex1_alu_src1, ex1_alu_src2;
+wire          ex1_mem_read, ex1_mem2reg, ex1_mem_write, ex1_regs_write;
+wire[2:0]     ex1_fu_id;
 
-wire [4:0]    me_rs2;
-wire [31:0]   me_regs_data2;
-wire [31:0]   me_alu_o;
-wire [4:0]    me_rd;
-wire          me_mem_read;
-wire          me_mem2reg;
-wire          me_mem_write;
-wire          me_regs_write;
-wire[31:0]    me_mem_data;
-wire[2:0]     me_func3_code;  
+// ============ EX2 Signals ============
+wire[31:0]    ex2_pc, ex2_regs_data1, ex2_regs_data2, ex2_imm;
+wire[2:0]     ex2_func3_code, ex2_alu_op;
+wire          ex2_func7_code;
+wire[4:0]     ex2_rd, ex2_rs2;
+wire[1:0]     ex2_alu_src1, ex2_alu_src2;
+wire          ex2_mem_read, ex2_mem2reg, ex2_mem_write, ex2_regs_write;
+wire[2:0]     ex2_fu_id;
 
-wire          forward_data;
+// ============ EX3 Signals ============
+wire[31:0]    ex3_pc, ex3_regs_data1, ex3_regs_data2, ex3_imm;
+wire[2:0]     ex3_func3_code, ex3_alu_op;
+wire          ex3_func7_code;
+wire[4:0]     ex3_rd, ex3_rs2;
+wire[1:0]     ex3_alu_src1, ex3_alu_src2;
+wire          ex3_mem_read, ex3_mem2reg, ex3_mem_write, ex3_regs_write;
+wire[2:0]     ex3_fu_id;
 
-wire[31:0]    wb_mem_data;
-wire[31:0]    wb_alu_o;
+// ============ EX4 Signals ============
+wire[31:0]    ex4_pc, ex4_regs_data1, ex4_regs_data2, ex4_imm;
+wire[2:0]     ex4_func3_code, ex4_alu_op;
+wire          ex4_func7_code;
+wire[4:0]     ex4_rd, ex4_rs2;
+wire[1:0]     ex4_alu_src1, ex4_alu_src2;
+wire          ex4_mem_read, ex4_mem2reg, ex4_mem_write, ex4_regs_write;
+wire[2:0]     ex4_fu_id;
+wire[31:0]    ex4_alu_o;
+
+// ============ MEM Signals ============
+wire[31:0]    me_regs_data2, me_alu_o, me_mem_data;
+wire[4:0]     me_rd;
+wire          me_mem_read, me_mem2reg, me_mem_write, me_regs_write;
+wire[2:0]     me_func3_code, me_fu_id;
+
+// ============ WB Pipeline Signals ============
+wire[31:0]    wb_mem_data, wb_alu_o;
 wire          wb_mem2reg;
 
+// IS write enable for scoreboard
+wire is_write_en = is_can_issue;
+wire rs_write_en = is_can_issue && is_regs_write && (is_rd != 5'd0);
+// WB clear enable for scoreboard
+wire wb_clear_en = w_regs_en;
+
+// ==================== IF Stage ====================
 stage_if u_stage_if(
-    .clk      (clk      ),
-    .rst      (rst      ),
-    .pc_stall (stall    ),
-    .br_addr  (br_addr  ),
-    .br_ctrl  (br_ctrl  ),
-    .if_inst  (if_inst  ),
-    .if_pc    (if_pc    )
+    .clk      (clk       ),
+    .rst      (rst       ),
+    .pc_stall (is_stall  ),
+    .br_addr  (32'b0     ),
+    .br_ctrl  (1'b0      ),
+    .if_inst  (if_inst   ),
+    .if_pc    (if_pc     )
 );
 
+// ==================== IF/IS Pipeline Register ====================
+reg_if_is u_reg_if_is(
+    .clk         (clk       ),
+    .rst         (rst       ),
+    .if_pc       (if_pc     ),
+    .if_inst     (if_inst   ),
+    .is_inst     (is_inst   ),
+    .is_pc       (is_pc     ),
+    .if_is_flush (1'b0      ),
+    .if_is_stall (is_stall  )
+);
 
-reg_if_id u_reg_if_id(
+// ==================== IS (Issue) Stage ====================
+stage_is u_stage_is(
+    .is_inst       (is_inst   ),
+    .is_pc         (is_pc     ),
+    .fu_busy       (fu_busy   ),
+    .reg_status_0  (rs_0 ), .reg_status_1  (rs_1 ), .reg_status_2  (rs_2 ), .reg_status_3  (rs_3 ),
+    .reg_status_4  (rs_4 ), .reg_status_5  (rs_5 ), .reg_status_6  (rs_6 ), .reg_status_7  (rs_7 ),
+    .reg_status_8  (rs_8 ), .reg_status_9  (rs_9 ), .reg_status_10 (rs_10), .reg_status_11 (rs_11),
+    .reg_status_12 (rs_12), .reg_status_13 (rs_13), .reg_status_14 (rs_14), .reg_status_15 (rs_15),
+    .reg_status_16 (rs_16), .reg_status_17 (rs_17), .reg_status_18 (rs_18), .reg_status_19 (rs_19),
+    .reg_status_20 (rs_20), .reg_status_21 (rs_21), .reg_status_22 (rs_22), .reg_status_23 (rs_23),
+    .reg_status_24 (rs_24), .reg_status_25 (rs_25), .reg_status_26 (rs_26), .reg_status_27 (rs_27),
+    .reg_status_28 (rs_28), .reg_status_29 (rs_29), .reg_status_30 (rs_30), .reg_status_31 (rs_31),
+    .is_fu_id      (is_fu_id      ),
+    .is_can_issue  (is_can_issue  ),
+    .is_stall      (is_stall      ),
+    .is_rd         (is_rd         ),
+    .is_rs1        (is_rs1        ),
+    .is_rs2        (is_rs2        ),
+    .is_func3_code (is_func3_code ),
+    .is_func7_code (is_func7_code ),
+    .is_alu_op     (is_alu_op     ),
+    .is_alu_src1   (is_alu_src1   ),
+    .is_alu_src2   (is_alu_src2   ),
+    .is_mem_read   (is_mem_read   ),
+    .is_mem2reg    (is_mem2reg    ),
+    .is_mem_write  (is_mem_write  ),
+    .is_regs_write (is_regs_write )
+);
+
+// ==================== Register Status Table ====================
+reg_status_table u_reg_status_table(
     .clk         (clk         ),
     .rst         (rst         ),
-    .if_pc       (if_pc       ),
-    .if_inst     (if_inst     ),
-    .id_inst     (id_inst     ),
-    .id_pc       (id_pc       ),
-    .if_id_flush (flush       ),
-    .if_id_stall (stall       )
+    .is_write_en (rs_write_en ),
+    .is_rd       (is_rd       ),
+    .is_fu_id    (is_fu_id    ),
+    .wb_clear_en (wb_clear_en ),
+    .wb_rd       (w_regs_addr ),
+    .wb_fu_id    (wb_fu_id    ),
+    .status_0  (rs_0 ), .status_1  (rs_1 ), .status_2  (rs_2 ), .status_3  (rs_3 ),
+    .status_4  (rs_4 ), .status_5  (rs_5 ), .status_6  (rs_6 ), .status_7  (rs_7 ),
+    .status_8  (rs_8 ), .status_9  (rs_9 ), .status_10 (rs_10), .status_11 (rs_11),
+    .status_12 (rs_12), .status_13 (rs_13), .status_14 (rs_14), .status_15 (rs_15),
+    .status_16 (rs_16), .status_17 (rs_17), .status_18 (rs_18), .status_19 (rs_19),
+    .status_20 (rs_20), .status_21 (rs_21), .status_22 (rs_22), .status_23 (rs_23),
+    .status_24 (rs_24), .status_25 (rs_25), .status_26 (rs_26), .status_27 (rs_27),
+    .status_28 (rs_28), .status_29 (rs_29), .status_30 (rs_30), .status_31 (rs_31)
 );
 
-stage_id u_stage_id(
-    .clk             (clk             ),
-    .rst             (rst             ),
-    .id_inst         (id_inst         ),
-    .w_regs_en       (w_regs_en       ),
-    .w_regs_addr     (w_regs_addr     ),
-    .w_regs_data     (w_regs_data     ),
-    .ctrl_stall      (stall           ),
-    .id_regs_data1   (id_regs_data1   ),
-    .id_regs_data2   (id_regs_data2   ),
-    .id_imm          (id_imm          ),
-    .id_func3_code   (id_func3_code   ),
-    .id_func7_code   (id_func7_code   ),
-    .id_rd           (id_rd           ),
-    .id_br           (id_br           ),
-    .id_mem_read     (id_mem_read     ),
-    .id_mem2reg      (id_mem2reg      ),
-    .id_alu_op       (id_alu_op       ),
-    .id_mem_write    (id_mem_write    ),
-    .id_alu_src1     (id_alu_src1     ),
-    .id_alu_src2     (id_alu_src2     ),
-    .id_br_addr_mode (id_br_addr_mode ),
-    .id_regs_write   (id_regs_write   ),
-    .id_rs1          (id_rs1          ),
-    .id_rs2          (id_rs2          )
-);
-
-
-reg_id_ex u_reg_id_ex(
-    .clk             (clk             ),
-    .rst             (rst             ),
-    .id_pc           (id_pc           ),
-    .id_regs_data1   (id_regs_data1   ),
-    .id_regs_data2   (id_regs_data2   ),
-    .id_imm          (id_imm          ),
-    .id_func3_code   (id_func3_code   ),
-    .id_func7_code   (id_func7_code   ),
-    .id_rd           (id_rd           ),
-    .id_br           (id_br           ),
-    .id_mem_read     (id_mem_read     ),
-    .id_mem2reg      (id_mem2reg      ),
-    .id_alu_op       (id_alu_op       ),
-    .id_mem_write    (id_mem_write    ),
-    .id_alu_src1     (id_alu_src1     ),
-    .id_alu_src2     (id_alu_src2     ),
-    .id_br_addr_mode (id_br_addr_mode ),
-    .id_regs_write   (id_regs_write   ),
-    .id_ex_flush     (flush           ),
-    .id_rs1          (id_rs1          ),
-    .id_rs2          (id_rs2          ),
-    .ex_rs1          (ex_rs1          ),
-    .ex_rs2          (ex_rs2          ),
-    .ex_pc           (ex_pc           ),
-    .ex_regs_data1   (ex_regs_data1   ),
-    .ex_regs_data2   (ex_regs_data2   ),
-    .ex_imm          (ex_imm          ),
-    .ex_func3_code   (ex_func3_code   ),
-    .ex_func7_code   (ex_func7_code   ),
-    .ex_rd           (ex_rd           ),
-    .ex_br           (ex_br           ),
-    .ex_mem_read     (ex_mem_read     ),
-    .ex_mem2reg      (ex_mem2reg      ),
-    .ex_alu_op       (ex_alu_op       ),
-    .ex_mem_write    (ex_mem_write    ),
-    .ex_alu_src1     (ex_alu_src1     ),
-    .ex_alu_src2     (ex_alu_src2     ),
-    .ex_br_addr_mode (ex_br_addr_mode ),
-    .ex_regs_write   (ex_regs_write   )
-);
-
-
-
-stage_ex u_stage_ex(
-    .ex_pc           (ex_pc           ),
-    .ex_regs_data1   (ex_regs_data1   ),
-    .ex_regs_data2   (ex_regs_data2   ),
-    .ex_imm          (ex_imm          ),
-    .ex_func3_code   (ex_func3_code   ),
-    .ex_func7_code   (ex_func7_code   ),
-    .ex_alu_op       (ex_alu_op       ),
-    .ex_alu_src1     (ex_alu_src1     ),
-    .ex_alu_src2     (ex_alu_src2     ),
-    .ex_br_addr_mode (ex_br_addr_mode ),
-    .ex_br           (ex_br           ),
-    .forwardA        (forwardA        ),
-    .forwardB        (forwardB        ),
-    .me_alu_o        (me_alu_o        ),
-    .w_regs_data     (w_regs_data     ),
-    .ex_alu_o        (ex_alu_o        ),
-    .br_pc           (br_addr         ),
-    .br_ctrl         (br_ctrl         )
-);
-
-reg_ex_mem u_reg_ex_mem(
+// ==================== Functional Unit Status Table ====================
+fu_status_table u_fu_status_table(
     .clk           (clk           ),
     .rst           (rst           ),
-    .ex_regs_data2 (ex_regs_data2 ),
-    .ex_alu_o      (ex_alu_o      ),
-    .ex_rd         (ex_rd         ),
-    .ex_mem_read   (ex_mem_read   ),
-    .ex_mem2reg    (ex_mem2reg    ),
-    .ex_mem_write  (ex_mem_write  ),
-    .ex_regs_write (ex_regs_write ),
-    .ex_func3_code (ex_func3_code ),
-    .ex_rs2        (ex_rs2        ),
-    .me_rs2        (me_rs2        ),
-    .me_regs_data2 (me_regs_data2 ),
-    .me_alu_o      (me_alu_o      ),
-    .me_rd         (me_rd         ),
-    .me_mem_read   (me_mem_read   ),
-    .me_mem2reg    (me_mem2reg    ),
-    .me_mem_write  (me_mem_write  ),
-    .me_regs_write (me_regs_write ),
-    .me_func3_code (me_func3_code )
+    .is_write_en   (is_write_en   ),
+    .is_fu_id      (is_fu_id      ),
+    .is_inst       (is_inst       ),
+    .is_pc         (is_pc         ),
+    .is_rd         (is_rd         ),
+    .is_rs1        (is_rs1        ),
+    .is_rs2        (is_rs2        ),
+    .is_func3_code (is_func3_code ),
+    .is_func7_code (is_func7_code ),
+    .is_alu_op     (is_alu_op     ),
+    .is_alu_src1   (is_alu_src1   ),
+    .is_alu_src2   (is_alu_src2   ),
+    .is_mem_read   (is_mem_read   ),
+    .is_mem2reg    (is_mem2reg    ),
+    .is_mem_write  (is_mem_write  ),
+    .is_regs_write (is_regs_write ),
+    .reg_status_0  (rs_0 ), .reg_status_1  (rs_1 ), .reg_status_2  (rs_2 ), .reg_status_3  (rs_3 ),
+    .reg_status_4  (rs_4 ), .reg_status_5  (rs_5 ), .reg_status_6  (rs_6 ), .reg_status_7  (rs_7 ),
+    .reg_status_8  (rs_8 ), .reg_status_9  (rs_9 ), .reg_status_10 (rs_10), .reg_status_11 (rs_11),
+    .reg_status_12 (rs_12), .reg_status_13 (rs_13), .reg_status_14 (rs_14), .reg_status_15 (rs_15),
+    .reg_status_16 (rs_16), .reg_status_17 (rs_17), .reg_status_18 (rs_18), .reg_status_19 (rs_19),
+    .reg_status_20 (rs_20), .reg_status_21 (rs_21), .reg_status_22 (rs_22), .reg_status_23 (rs_23),
+    .reg_status_24 (rs_24), .reg_status_25 (rs_25), .reg_status_26 (rs_26), .reg_status_27 (rs_27),
+    .reg_status_28 (rs_28), .reg_status_29 (rs_29), .reg_status_30 (rs_30), .reg_status_31 (rs_31),
+    .wb_clear_en   (wb_clear_en   ),
+    .wb_fu_id      (wb_fu_id      ),
+    .ro_valid      (fu_ro_valid      ),
+    .ro_fu_id      (fu_ro_fu_id      ),
+    .ro_inst       (fu_ro_inst       ),
+    .ro_pc         (fu_ro_pc         ),
+    .ro_rd         (fu_ro_rd         ),
+    .ro_rs1        (fu_ro_rs1        ),
+    .ro_rs2        (fu_ro_rs2        ),
+    .ro_func3_code (fu_ro_func3_code ),
+    .ro_func7_code (fu_ro_func7_code ),
+    .ro_alu_op     (fu_ro_alu_op     ),
+    .ro_alu_src1   (fu_ro_alu_src1   ),
+    .ro_alu_src2   (fu_ro_alu_src2   ),
+    .ro_mem_read   (fu_ro_mem_read   ),
+    .ro_mem2reg    (fu_ro_mem2reg    ),
+    .ro_mem_write  (fu_ro_mem_write  ),
+    .ro_regs_write (fu_ro_regs_write ),
+    .fu_busy       (fu_busy          )
 );
 
+// ==================== RO (Read Operands) Stage ====================
+stage_ro u_stage_ro(
+    .clk           (clk              ),
+    .rst           (rst              ),
+    .ro_inst       (fu_ro_inst       ),
+    .ro_rs1        (fu_ro_rs1        ),
+    .ro_rs2        (fu_ro_rs2        ),
+    .w_regs_en     (w_regs_en        ),
+    .w_regs_addr   (w_regs_addr      ),
+    .w_regs_data   (w_regs_data      ),
+    .ro_regs_data1 (ro_regs_data1    ),
+    .ro_regs_data2 (ro_regs_data2    ),
+    .ro_imm        (ro_imm           )
+);
 
+// ==================== RO/EX1 Pipeline Register ====================
+reg_ro_ex1 u_reg_ro_ex1(
+    .clk            (clk              ),
+    .rst            (rst              ),
+    .ro_valid       (fu_ro_valid      ),
+    .ro_pc          (fu_ro_pc         ),
+    .ro_regs_data1  (ro_regs_data1    ),
+    .ro_regs_data2  (ro_regs_data2    ),
+    .ro_imm         (ro_imm           ),
+    .ro_func3_code  (fu_ro_func3_code ),
+    .ro_func7_code  (fu_ro_func7_code ),
+    .ro_rd          (fu_ro_rd         ),
+    .ro_rs2         (fu_ro_rs2        ),
+    .ro_alu_op      (fu_ro_alu_op     ),
+    .ro_alu_src1    (fu_ro_alu_src1   ),
+    .ro_alu_src2    (fu_ro_alu_src2   ),
+    .ro_mem_read    (fu_ro_mem_read   ),
+    .ro_mem2reg     (fu_ro_mem2reg    ),
+    .ro_mem_write   (fu_ro_mem_write  ),
+    .ro_regs_write  (fu_ro_regs_write ),
+    .ro_fu_id       (fu_ro_fu_id      ),
+    .ex1_pc         (ex1_pc           ),
+    .ex1_regs_data1 (ex1_regs_data1   ),
+    .ex1_regs_data2 (ex1_regs_data2   ),
+    .ex1_imm        (ex1_imm          ),
+    .ex1_func3_code (ex1_func3_code   ),
+    .ex1_func7_code (ex1_func7_code   ),
+    .ex1_rd         (ex1_rd           ),
+    .ex1_rs2        (ex1_rs2          ),
+    .ex1_alu_op     (ex1_alu_op       ),
+    .ex1_alu_src1   (ex1_alu_src1     ),
+    .ex1_alu_src2   (ex1_alu_src2     ),
+    .ex1_mem_read   (ex1_mem_read     ),
+    .ex1_mem2reg    (ex1_mem2reg      ),
+    .ex1_mem_write  (ex1_mem_write    ),
+    .ex1_regs_write (ex1_regs_write   ),
+    .ex1_fu_id      (ex1_fu_id        )
+);
+
+// ==================== EX1/EX2 Pipeline Register ====================
+reg_ex1_ex2 u_reg_ex1_ex2(
+    .clk            (clk            ),
+    .rst            (rst            ),
+    .ex1_pc         (ex1_pc         ),
+    .ex1_regs_data1 (ex1_regs_data1 ),
+    .ex1_regs_data2 (ex1_regs_data2 ),
+    .ex1_imm        (ex1_imm        ),
+    .ex1_func3_code (ex1_func3_code ),
+    .ex1_func7_code (ex1_func7_code ),
+    .ex1_rd         (ex1_rd         ),
+    .ex1_rs2        (ex1_rs2        ),
+    .ex1_alu_op     (ex1_alu_op     ),
+    .ex1_alu_src1   (ex1_alu_src1   ),
+    .ex1_alu_src2   (ex1_alu_src2   ),
+    .ex1_mem_read   (ex1_mem_read   ),
+    .ex1_mem2reg    (ex1_mem2reg    ),
+    .ex1_mem_write  (ex1_mem_write  ),
+    .ex1_regs_write (ex1_regs_write ),
+    .ex1_fu_id      (ex1_fu_id      ),
+    .ex2_pc         (ex2_pc         ),
+    .ex2_regs_data1 (ex2_regs_data1 ),
+    .ex2_regs_data2 (ex2_regs_data2 ),
+    .ex2_imm        (ex2_imm        ),
+    .ex2_func3_code (ex2_func3_code ),
+    .ex2_func7_code (ex2_func7_code ),
+    .ex2_rd         (ex2_rd         ),
+    .ex2_rs2        (ex2_rs2        ),
+    .ex2_alu_op     (ex2_alu_op     ),
+    .ex2_alu_src1   (ex2_alu_src1   ),
+    .ex2_alu_src2   (ex2_alu_src2   ),
+    .ex2_mem_read   (ex2_mem_read   ),
+    .ex2_mem2reg    (ex2_mem2reg    ),
+    .ex2_mem_write  (ex2_mem_write  ),
+    .ex2_regs_write (ex2_regs_write ),
+    .ex2_fu_id      (ex2_fu_id      )
+);
+
+// ==================== EX2/EX3 Pipeline Register ====================
+reg_ex2_ex3 u_reg_ex2_ex3(
+    .clk            (clk            ),
+    .rst            (rst            ),
+    .ex2_pc         (ex2_pc         ),
+    .ex2_regs_data1 (ex2_regs_data1 ),
+    .ex2_regs_data2 (ex2_regs_data2 ),
+    .ex2_imm        (ex2_imm        ),
+    .ex2_func3_code (ex2_func3_code ),
+    .ex2_func7_code (ex2_func7_code ),
+    .ex2_rd         (ex2_rd         ),
+    .ex2_rs2        (ex2_rs2        ),
+    .ex2_alu_op     (ex2_alu_op     ),
+    .ex2_alu_src1   (ex2_alu_src1   ),
+    .ex2_alu_src2   (ex2_alu_src2   ),
+    .ex2_mem_read   (ex2_mem_read   ),
+    .ex2_mem2reg    (ex2_mem2reg    ),
+    .ex2_mem_write  (ex2_mem_write  ),
+    .ex2_regs_write (ex2_regs_write ),
+    .ex2_fu_id      (ex2_fu_id      ),
+    .ex3_pc         (ex3_pc         ),
+    .ex3_regs_data1 (ex3_regs_data1 ),
+    .ex3_regs_data2 (ex3_regs_data2 ),
+    .ex3_imm        (ex3_imm        ),
+    .ex3_func3_code (ex3_func3_code ),
+    .ex3_func7_code (ex3_func7_code ),
+    .ex3_rd         (ex3_rd         ),
+    .ex3_rs2        (ex3_rs2        ),
+    .ex3_alu_op     (ex3_alu_op     ),
+    .ex3_alu_src1   (ex3_alu_src1   ),
+    .ex3_alu_src2   (ex3_alu_src2   ),
+    .ex3_mem_read   (ex3_mem_read   ),
+    .ex3_mem2reg    (ex3_mem2reg    ),
+    .ex3_mem_write  (ex3_mem_write  ),
+    .ex3_regs_write (ex3_regs_write ),
+    .ex3_fu_id      (ex3_fu_id      )
+);
+
+// ==================== EX3/EX4 Pipeline Register ====================
+reg_ex3_ex4 u_reg_ex3_ex4(
+    .clk            (clk            ),
+    .rst            (rst            ),
+    .ex3_pc         (ex3_pc         ),
+    .ex3_regs_data1 (ex3_regs_data1 ),
+    .ex3_regs_data2 (ex3_regs_data2 ),
+    .ex3_imm        (ex3_imm        ),
+    .ex3_func3_code (ex3_func3_code ),
+    .ex3_func7_code (ex3_func7_code ),
+    .ex3_rd         (ex3_rd         ),
+    .ex3_rs2        (ex3_rs2        ),
+    .ex3_alu_op     (ex3_alu_op     ),
+    .ex3_alu_src1   (ex3_alu_src1   ),
+    .ex3_alu_src2   (ex3_alu_src2   ),
+    .ex3_mem_read   (ex3_mem_read   ),
+    .ex3_mem2reg    (ex3_mem2reg    ),
+    .ex3_mem_write  (ex3_mem_write  ),
+    .ex3_regs_write (ex3_regs_write ),
+    .ex3_fu_id      (ex3_fu_id      ),
+    .ex4_pc         (ex4_pc         ),
+    .ex4_regs_data1 (ex4_regs_data1 ),
+    .ex4_regs_data2 (ex4_regs_data2 ),
+    .ex4_imm        (ex4_imm        ),
+    .ex4_func3_code (ex4_func3_code ),
+    .ex4_func7_code (ex4_func7_code ),
+    .ex4_rd         (ex4_rd         ),
+    .ex4_rs2        (ex4_rs2        ),
+    .ex4_alu_op     (ex4_alu_op     ),
+    .ex4_alu_src1   (ex4_alu_src1   ),
+    .ex4_alu_src2   (ex4_alu_src2   ),
+    .ex4_mem_read   (ex4_mem_read   ),
+    .ex4_mem2reg    (ex4_mem2reg    ),
+    .ex4_mem_write  (ex4_mem_write  ),
+    .ex4_regs_write (ex4_regs_write ),
+    .ex4_fu_id      (ex4_fu_id      )
+);
+
+// ==================== EX4 (ALU Execution) Stage ====================
+stage_ex u_stage_ex(
+    .ex4_pc         (ex4_pc         ),
+    .ex4_regs_data1 (ex4_regs_data1 ),
+    .ex4_regs_data2 (ex4_regs_data2 ),
+    .ex4_imm        (ex4_imm        ),
+    .ex4_func3_code (ex4_func3_code ),
+    .ex4_func7_code (ex4_func7_code ),
+    .ex4_alu_op     (ex4_alu_op     ),
+    .ex4_alu_src1   (ex4_alu_src1   ),
+    .ex4_alu_src2   (ex4_alu_src2   ),
+    .ex4_alu_o      (ex4_alu_o      )
+);
+
+// ==================== EX4/MEM Pipeline Register ====================
+reg_ex_mem u_reg_ex_mem(
+    .clk            (clk            ),
+    .rst            (rst            ),
+    .ex4_regs_data2 (ex4_regs_data2 ),
+    .ex4_alu_o      (ex4_alu_o      ),
+    .ex4_rd         (ex4_rd         ),
+    .ex4_mem_read   (ex4_mem_read   ),
+    .ex4_mem2reg    (ex4_mem2reg    ),
+    .ex4_mem_write  (ex4_mem_write  ),
+    .ex4_regs_write (ex4_regs_write ),
+    .ex4_func3_code (ex4_func3_code ),
+    .ex4_fu_id      (ex4_fu_id      ),
+    .me_regs_data2  (me_regs_data2  ),
+    .me_alu_o       (me_alu_o       ),
+    .me_rd          (me_rd          ),
+    .me_mem_read    (me_mem_read    ),
+    .me_mem2reg     (me_mem2reg     ),
+    .me_mem_write   (me_mem_write   ),
+    .me_regs_write  (me_regs_write  ),
+    .me_func3_code  (me_func3_code  ),
+    .me_fu_id       (me_fu_id       )
+);
+
+// ==================== MEM Stage ====================
 stage_mem u_stage_mem(
     .clk           (clk           ),
     .rst           (rst           ),
@@ -224,12 +436,10 @@ stage_mem u_stage_mem(
     .me_mem_read   (me_mem_read   ),
     .me_mem_write  (me_mem_write  ),
     .me_func3_code (me_func3_code ),
-    .forward_data  (forward_data  ),
-    .w_regs_data   (w_regs_data   ),
     .me_mem_data   (me_mem_data   )
 );
 
-
+// ==================== MEM/WB Pipeline Register ====================
 reg_mem_wb u_reg_mem_wb(
     .clk           (clk           ),
     .rst           (rst           ),
@@ -238,44 +448,21 @@ reg_mem_wb u_reg_mem_wb(
     .me_rd         (me_rd         ),
     .me_mem2reg    (me_mem2reg    ),
     .me_regs_write (me_regs_write ),
+    .me_fu_id      (me_fu_id      ),
     .wb_mem_data   (wb_mem_data   ),
     .wb_alu_o      (wb_alu_o      ),
     .wb_rd         (w_regs_addr   ),
     .wb_mem2reg    (wb_mem2reg    ),
-    .wb_regs_write (w_regs_en     )
+    .wb_regs_write (w_regs_en     ),
+    .wb_fu_id      (wb_fu_id      )
 );
 
-
+// ==================== WB Stage ====================
 stage_wb u_stage_wb(
     .wb_mem_data (wb_mem_data ),
     .wb_alu_o    (wb_alu_o    ),
     .wb_mem2reg  (wb_mem2reg  ),
     .w_regs_data (w_regs_data )
 );
-
-forwarding u_forwarding(
-    .ex_rs1        (ex_rs1        ),
-    .ex_rs2        (ex_rs2        ),
-    .me_rd         (me_rd         ),
-    .wb_rd         (w_regs_addr   ),
-    .me_rs2        (me_rs2        ),
-    .me_mem_write  (me_mem_write  ),
-    .me_regs_write (me_regs_write ),
-    .wb_regs_write (w_regs_en     ),
-    .forwardA      (forwardA      ),
-    .forwardB      (forwardB      ),
-    .forward_data  (forward_data  )
-);
-
-hazard_detection u_hazard_detection(
-    .ex_mem_read (ex_mem_read ),
-    .id_rs1      (id_rs1      ),
-    .id_rs2      (id_rs2      ),
-    .ex_rd       (ex_rd       ),
-    .br_ctrl     (br_ctrl     ),
-    .load_stall  (stall       ),
-    .flush       (flush       )
-);
-
 
 endmodule

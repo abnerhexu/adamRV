@@ -63,7 +63,34 @@ run:
 
 	@echo
 	@echo "-- VERILATE ----------------"
-	$(VERILATOR) $(VERILATOR_FLAGS) ./AdamRiscv/define.vh ./AdamRiscv/adam_riscv.v ./AdamRiscv/alu.v ./AdamRiscv/alu_control.v ./AdamRiscv/ctrl.v ./AdamRiscv/data_memory.v  ./AdamRiscv/forwarding.v ./AdamRiscv/hazard_detection.v ./AdamRiscv/imm_gen.v ./AdamRiscv/inst_memory.v ./AdamRiscv/pc.v ./AdamRiscv/reg_ex_mem.v ./AdamRiscv/reg_id_ex.v ./AdamRiscv/reg_if_id.v ./AdamRiscv/reg_mem_wb.v ./AdamRiscv/regs.v ./AdamRiscv/stage_ex.v ./AdamRiscv/stage_id.v ./AdamRiscv/stage_if.v ./AdamRiscv/stage_mem.v ./AdamRiscv/stage_wb.v adam_riscv_main.cpp --top-module adam_riscv
+	$(VERILATOR) $(VERILATOR_FLAGS) \
+	    ./AdamRiscv/define.vh \
+	    ./AdamRiscv/adam_riscv.v \
+	    ./AdamRiscv/alu.v \
+	    ./AdamRiscv/alu_control.v \
+	    ./AdamRiscv/ctrl.v \
+	    ./AdamRiscv/data_memory.v \
+	    ./AdamRiscv/imm_gen.v \
+	    ./AdamRiscv/inst_memory.v \
+	    ./AdamRiscv/pc.v \
+	    ./AdamRiscv/regs.v \
+	    ./AdamRiscv/stage_if.v \
+	    ./AdamRiscv/stage_is.v \
+	    ./AdamRiscv/stage_ro.v \
+	    ./AdamRiscv/stage_ex.v \
+	    ./AdamRiscv/stage_mem.v \
+	    ./AdamRiscv/stage_wb.v \
+	    ./AdamRiscv/reg_if_is.v \
+	    ./AdamRiscv/reg_ro_ex1.v \
+	    ./AdamRiscv/reg_ex1_ex2.v \
+	    ./AdamRiscv/reg_ex2_ex3.v \
+	    ./AdamRiscv/reg_ex3_ex4.v \
+	    ./AdamRiscv/reg_ex_mem.v \
+	    ./AdamRiscv/reg_mem_wb.v \
+	    ./AdamRiscv/reg_status_table.v \
+	    ./AdamRiscv/fu_status_table.v \
+	    adam_riscv_main.cpp \
+	    --top-module adam_riscv
 
 	@echo
 	@echo "-- COMPILE -----------------"
