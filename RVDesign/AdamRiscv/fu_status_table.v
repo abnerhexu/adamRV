@@ -122,6 +122,9 @@ wire can_select [0:6];
 wire s1_rdy [0:6];
 wire s2_rdy [0:6];
 
+// Store data ready: SW/SB use rs2 as store data even though alu_src2==IMM
+wire store_data_rdy [0:6];
+
 genvar g;
 generate
     for (g = 0; g < 7; g = g + 1) begin : ready_check
@@ -134,7 +137,12 @@ generate
         assign s2_rdy[g] = (entry_src2[g] == `IMM) || (entry_src2[g] == `PC_PLUS4) ||
                            (entry_rs2[g] == 5'd0) || (get_reg_status(entry_rs2[g]) == 3'b000) ||
                            (get_reg_status(entry_rs2[g]) == (g + 1));
-        assign can_select[g] = entry_busy[g] && (entry_state[g] == 2'b01) && s1_rdy[g] && s2_rdy[g];
+        // For store instructions, rs2 provides the data to write — must be ready
+        assign store_data_rdy[g] = !entry_mw[g] ||
+                           (entry_rs2[g] == 5'd0) || (get_reg_status(entry_rs2[g]) == 3'b000) ||
+                           (get_reg_status(entry_rs2[g]) == (g + 1));
+        assign can_select[g] = entry_busy[g] && (entry_state[g] == 2'b01) &&
+                               s1_rdy[g] && s2_rdy[g] && store_data_rdy[g];
     end
 endgenerate
 
